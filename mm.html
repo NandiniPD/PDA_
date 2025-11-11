@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDA for L = { w c wʳ }</title>
+  <style>
+    body { font-family: 'Poppins', sans-serif; text-align: center; background: #f8faff; }
+    h1 { color: #333; }
+    .state { display: inline-block; width: 80px; height: 80px; border: 3px solid #444; border-radius: 50%; line-height: 80px; margin: 20px; font-weight: bold; transition: all 0.3s ease; }
+    .active { background: #9ef7a0; box-shadow: 0 0 15px #7cf57f; }
+    .accept { border: 4px double #444; }
+    .stack-box { display: inline-block; border: 2px solid #222; min-height: 160px; width: 80px; background: #fff; margin-top: 20px; }
+    .stack-item { border-bottom: 1px solid #ccc; padding: 6px; font-size: 18px; }
+    button { padding: 10px 18px; margin: 10px; font-size: 16px; background: #1e88e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    button:hover { background: #1669bb; }
+    #result { font-size: 22px; font-weight: bold; margin-top: 20px; }
+    #transition-table { width: 70%; margin: 30px auto; border-collapse: collapse; }
+    #transition-table th, #transition-table td { border: 1px solid #777; padding: 8px; }
+    #transition-table th { background: #dfefff; }
+  </style>
+</head>
+<body>
+  <h1>PDA Animation for L = { w c wʳ }</h1>
+
+  <div>
+    <div id="q0" class="state">q0</div>
+    <div id="q1" class="state">q1</div>
+    <div id="q2" class="state">q2</div>
+    <div id="q3" class="state accept">q3</div>
+  </div>
+
+  <p id="transition">No transition yet.</p>
+  <p><b>Input:</b> <span id="input"></span></p>
+
+  <div class="stack-box" id="stack"></div>
+  <p id="result"></p>
+
+  <button onclick="startSimulation('abbcbba')">▶ Run Accepting (abbcbba)</button>
+  <button onclick="startSimulation('abbcbab')">▶ Run Rejecting (abbcbab)</button>
+
+  <table id="transition-table">
+    <tr><th>Phase</th><th>Transition</th><th>Description</th></tr>
+    <tr><td>Init</td><td>(q₀, ε, ε) → (q₁, Z₀)</td><td>Initialize stack with bottom marker</td></tr>
+    <tr><td>Push</td><td>(q₁, a, ε) → (q₁, a) <br> (q₁, b, ε) → (q₁, b)</td><td>Push all input symbols before ‘c’</td></tr>
+    <tr><td>Pivot</td><td>(q₁, c, a/b) → (q₂, a/b)</td><td>Encounter ‘c’ and switch to matching mode</td></tr>
+    <tr><td>Match</td><td>(q₂, a, a) → (q₂, ε) <br> (q₂, b, b) → (q₂, ε)</td><td>Pop matching symbols for wʳ</td></tr>
+    <tr><td>Accept</td><td>(q₂, ε, Z₀) → (q₃, ε)</td><td>Accept if stack empty and input fully read</td></tr>
+  </table>
+
+  <script>
+    const states = ['q0', 'q1', 'q2', 'q3'];
+    let stack = [];
+    let currentState = 'q0';
+    let currentInput = '';
+    let index = 0;
+    let timer;
+
+    // ⏱ Set slower delay for explanation (1.5 seconds)
+    const DELAY = 1500;
+
+    function updateUI(message) {
+      document.querySelectorAll('.state').forEach(s => s.classList.remove('active'));
+      document.getElementById(currentState).classList.add('active');
+      document.getElementById('transition').innerText = message;
+      document.getElementById('input').innerText = currentInput.slice(index);
+      const stackDiv = document.getElementById('stack');
+      stackDiv.innerHTML = '';
+      [...stack].reverse().forEach(sym => {
+        const div = document.createElement('div');
+        div.className = 'stack-item';
+        div.innerText = sym;
+        stackDiv.appendChild(div);
+      });
+    }
+
+    function reset() {
+      clearTimeout(timer);
+      stack = [];
+      currentState = 'q0';
+      index = 0;
+      document.getElementById('result').innerText = '';
+      updateUI('Ready.');
+    }
+
+    function startSimulation(input) {
+      reset();
+      currentInput = input;
+      updateUI('Initializing stack');
+      setTimeout(runPDA, DELAY);
+    }
+
+    function runPDA() {
+      if (currentState === 'q0') {
+        stack.push('Z0');
+        currentState = 'q1';
+        updateUI('δ(q0, ε, ε) → (q1, Z0)');
+        index = 0;
+        timer = setTimeout(runPDA, DELAY);
+      }
+      else if (currentState === 'q1') {
+        const sym = currentInput[index];
+        if (sym === 'a' || sym === 'b') {
+          stack.push(sym);
+          updateUI(`Push ${sym} → δ(q1, ${sym}, ε) → (q1, ${sym})`);
+          index++;
+          timer = setTimeout(runPDA, DELAY);
+        } else if (sym === 'c') {
+          currentState = 'q2';
+          index++;
+          updateUI('Pivot on c → δ(q1, c, X) → (q2, X)');
+          timer = setTimeout(runPDA, DELAY);
+        } else {
+          reject('Unexpected symbol');
+        }
+      }
+      else if (currentState === 'q2') {
+        const sym = currentInput[index];
+        const top = stack[stack.length - 1];
+        if ((sym === 'a' || sym === 'b') && top === sym) {
+          stack.pop();
+          updateUI(`Match ${sym} → δ(q2, ${sym}, ${sym}) → (q2, ε)`);
+          index++;
+          timer = setTimeout(runPDA, DELAY);
+        } else if (!sym && top === 'Z0') {
+          stack.pop();
+          currentState = 'q3';
+          updateUI('δ(q2, ε, Z0) → (q3, ε)');
+          timer = setTimeout(() => accept(), DELAY);
+        } else {
+          reject(`Mismatch at symbol ${sym}`);
+        }
+      }
+    }
+
+    function accept() {
+      updateUI('Accepted ✅');
+      document.getElementById('result').innerText = '✅ String Accepted!';
+    }
+
+    function reject(msg) {
+      updateUI(`Reject: ${msg}`);
+      document.getElementById('result').innerText = '❌ String Rejected!';
+    }
+  </script>
+</body>
+</html>
